@@ -10,4 +10,12 @@ socket.on("connect", ()=>{
 
 socket.on("joined", (player: Player)=>{
   console.log(`${player.name} just joined the game`)
+  console.log(`your base: ${JSON.stringify(player.base)}`)
+  console.log(`your ressources: ${player.ressources}`)
 })
+
+socket.on("ressourcesCollected", (ressources:number)=>{
+  console.log(`you have ${ressources} gold`)
+  socket.emit("collectRessources")
+})
+
