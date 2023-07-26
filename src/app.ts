@@ -10,15 +10,17 @@ const io = new Server(server);
 
 const players: { [key: string]: Player } = {}
 const startingGold: number = 1000
+const buildingUpgrade = 30000
 
 io.on("connection", (socket: Socket) => {
   console.log(`user connected: ${ socket.id }`);
 
   socket.on("join", (name: string) => {
+
     const newBase: Base = {
       buildings: [{
         type:"hotel de ville",
-        level:1
+        level:1,
       }],
     }
     const newPlayer: Player = {
@@ -41,6 +43,37 @@ io.on("connection", (socket: Socket) => {
       socket.emit("ressourcesCollected", player.ressources)
     }
   })
+
+  socket.on("upgradeBuilding", (buildingType : string) => {
+    const player = players[socket.id];
+    console.log(players);
+    
+    if (player){
+      const building = player.base.buildings.find((building) => building.type === buildingType);
+      if (building) {
+        if(building.level < 3){
+          if (!building.upgradeTime){
+            building.upgradeTime = buildingUpgrade;
+            console.log(`${player.name} started upgrading ${buildingType}`);
+            socket.emit('upgradeStarted', {buildingType, upgradeTime: buildingUpgrade})
+            setTimeout(() => {
+              building.level++
+              delete building.upgradeTime
+              console.log(`${buildingType} upgrading to level ${building.level}`);
+              socket.emit('upgradeFinished', {buildingType, level : building.level})
+            }, buildingUpgrade)
+          } else {
+            socket.emit('upgradeInProgress')
+          }
+        }else{
+          socket.emit('maximumLevelReached')
+        }
+      }else{
+        socket.emit('buildingNotFound')
+      }
+    }
+  })
+
 
   socket.on(`disconnect`, () => {
         const player = players[socket.id]
