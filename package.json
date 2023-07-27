@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "npx nodemon app.ts",
-    "client": "ts-node src/client.ts"
+    "client": "ts-node src/client.ts",
+    "client2": "ts-node src/client2.ts"
   },
   "keywords": [],
   "author": "",

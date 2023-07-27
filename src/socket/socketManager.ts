@@ -5,39 +5,48 @@ import { Base } from "../interfaces/Base.model";
 
 const players: { [key: string]: Player } = {};
 const startingGold: number = 1000;
+const statingElixir = 1000;
 const buildingUpgrade = 30000;
 
 export function initializeSocket(io: socketio.Server, server: Server) {
   io.on("connection", (socket) => {
-    console.log(`user connected: ${socket.id}`);
+    console.log(`User connected: ${socket.id}`);
+
     socket.on("join", (name: string) => {
       const newBase: Base = {
-        buildings: [
-          {
-            type: "hotel de ville",
-            level: 1,
-          },
-        ],
+        buildings: [{ type: "Town Hall", level: 1 }],
       };
+
       const newPlayer: Player = {
-        id: name === "player1" ? "1" : socket.id,
+        id: socket.id,
         name: name,
-        ressources: startingGold,
+        resources: startingGold,
         base: newBase,
       };
+
       players[socket.id] = newPlayer;
-      console.log(`${name} has joined the game`);
+      console.log(`${name} joined the game.`);
+
       socket.emit("joined", newPlayer);
+      io.emit("playerJoined", newPlayer);
     });
+
+    socket.on("getAvailableEnemies", () => {
+      const availableEnemies = Object.values(players).filter(
+        (player) => player.id !== socket.id
+      );
+      socket.emit("availableEnemies", availableEnemies);
+    });
+
     socket.on("collectRessources", () => {
       const player = players[socket.id];
       if (player) {
         const ressourcesAmount = 100;
-        player.ressources += ressourcesAmount;
+        player.resources += ressourcesAmount;
         console.log(
-          `${player.name} is ${ressourcesAmount} richer with ${player.ressources} gold`
+          `${player.name} is ${ressourcesAmount} richer with ${player.resources} gold`
         );
-        socket.emit("ressourcesCollected", player.ressources);
+        socket.emit("ressourcesCollected", player.resources);
       }
     });
 
@@ -84,41 +93,62 @@ export function initializeSocket(io: socketio.Server, server: Server) {
     socket.on("attackEnemyBase", (enemyBaseId: string) => {
       const player = players[socket.id];
       const enemyPlayer = players[enemyBaseId];
-      console.log(players);
 
       if (player && enemyPlayer) {
-        // Calculer la puissance d'attaque en fonction du niveau des buildings, troupes etc..
         const attackingPower = 500;
         const defensePower = 300;
+
         const damage = Math.max(0, attackingPower - defensePower);
+
         enemyPlayer.base.buildings.forEach((building) => {
           building.level = Math.max(0, building.level - damage);
         });
-        socket.emit("enemyBaseAttacked", {
-          enemyBase: enemyPlayer.base,
-          stolenGold: 0,
-          stolenElixir: 0,
+
+        socket.emit("attackResult", { enemyPlayerId: enemyBaseId, damage });
+        io.to(enemyBaseId).emit("defendResult", {
+          attackerId: socket.id,
+          damage,
         });
-        io.to(enemyBaseId).emit("enemyBaseAttacked", {
-          enemyBase: enemyPlayer.base,
-          stolenGold: 0,
-          stolenElixir: 0,
-        });
+
         console.log(
-          `${players[socket.id].name} attacked ${enemyPlayer.name} base`
+          `${players[socket.id].name} attacked ${enemyPlayer.name}'s base.`
         );
-        console.log(`damage: ${damage}`);
+        enemyBaseAttacked(enemyPlayer, player);
+        console.log(`Damage: ${damage}`);
       } else {
         socket.emit("enemyBaseNotFound");
       }
     });
 
-    socket.on(`disconnect`, () => {
+    socket.on("disconnect", () => {
       const player = players[socket.id];
       if (player) {
-        console.log(`${player.name} left the game`);
+        console.log(`${player.name} left the game.`);
         delete players[socket.id];
+        io.emit("playerLeft", socket.id);
       }
     });
   });
+}
+
+// Function to handle the enemy base being attacked
+function enemyBaseAttacked(enemyPlayer: Player, attacker: Player) {
+  // Check if the enemy base has been destroyed
+  const baseDestroyed = enemyPlayer.base.buildings.every((building) => building.level === 0);
+
+  if (baseDestroyed) {
+    console.log(`${enemyPlayer.name}'s base has been destroyed!`);
+
+    // Reward the attacker for destroying the enemy base
+    const rewardAmount = 500;
+    attacker.resources += rewardAmount;
+    console.log(`${attacker.name} received ${rewardAmount} resources for destroying the enemy base.`);
+  } else {
+    console.log(`${enemyPlayer.name}'s base has been attacked!`);
+
+    // Consequence for the attacker when the enemy base is not destroyed (optional)
+    const consequenceAmount = 200;
+    attacker.resources -= consequenceAmount;
+    console.log(`${attacker.name} lost ${consequenceAmount} resources for a failed attack.`);
+  }
 }
